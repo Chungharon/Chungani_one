@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getProjects } from '@/lib/projects'
 import Projects from '@/components/projects'
+import { Button } from '@/components/ui/button'
 
 export default async function RecentProjects() {
   const projects = await getProjects(2)
@@ -11,12 +12,13 @@ export default async function RecentProjects() {
         <h2 className='title mb-12'>Recent projects</h2>
         <Projects projects={projects} />
 
-        <Link
-          href='/projects'
-          className='mt-8 inline-flex items-center gap-2 text-muted-foreground underline decoration-1 underline-offset-2 transition-colors hover:text-foreground'
+        <Button
+          variant='link'
+          asChild
+          className='mt-8 p-0 text-muted-foreground hover:text-foreground'
         >
-          <span>All projects</span>
-        </Link>
+          <Link href='/projects'>All projects</Link>
+        </Button>
       </div>
     </section>
   )

@@ -7,7 +7,7 @@ import ContactFormEmail from '@/emails/contact-form-email'
 
 type ContactFormInputs = z.infer<typeof ContactFormSchema>
 type NewsletterFormInputs = z.infer<typeof NewsletterFormSchema>
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = new Resend(process.env.RESEND_API_KEY || 'no-key-provided')
 
 export async function sendEmail(data: ContactFormInputs) {
   const result = ContactFormSchema.safeParse(data)
@@ -18,6 +18,11 @@ export async function sendEmail(data: ContactFormInputs) {
 
   try {
     const { name, email, message } = result.data
+
+    if (!process.env.RESEND_API_KEY) {
+      return { error: 'Email service is not configured.' }
+    }
+
     const { data, error } = await resend.emails.send({
       from: 'ngairaharon1@gmail.com',
       to: [email],
@@ -46,6 +51,11 @@ export async function subscribe(data: NewsletterFormInputs) {
 
   try {
     const { email } = result.data
+
+    if (!process.env.RESEND_API_KEY) {
+      return { error: 'Newsletter service is not configured.' }
+    }
+
     const { data, error } = await resend.contacts.create({
       email: email,
       audienceId: process.env.RESEND_AUDIENCE_ID as string

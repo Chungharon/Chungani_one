@@ -3,31 +3,34 @@
 import { z } from 'zod'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { SubmitHandler, useForm } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { NewsletterFormSchema } from '@/lib/schemas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
 import { subscribe } from '@/lib/actions'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage
+} from '@/components/ui/form'
 
 type Inputs = z.infer<typeof NewsletterFormSchema>
 
 export default function NewsletterForm() {
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting }
-  } = useForm<Inputs>({
+  const form = useForm<Inputs>({
     resolver: zodResolver(NewsletterFormSchema),
     defaultValues: {
       email: ''
     }
   })
 
-  const processForm: SubmitHandler<Inputs> = async data => {
+  const { isSubmitting } = form.formState
+
+  async function onSubmit(data: Inputs) {
     const result = await subscribe(data)
 
     if (result?.error) {
@@ -36,7 +39,7 @@ export default function NewsletterForm() {
     }
 
     toast.success('Subscribed successfully!')
-    reset()
+    form.reset()
   }
 
   return (
@@ -50,46 +53,52 @@ export default function NewsletterForm() {
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubmit(processForm)}
-            className='flex flex-col items-start gap-3'
-          >
-            <div className='w-full'>
-              <Input
-                type='email'
-                id='email'
-                autoComplete='email'
-                placeholder='Email'
-                className='w-full'
-                {...register('email')}
-              />
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className='flex flex-col items-start gap-3'
+            >
+              <div className='w-full'>
+                <FormField
+                  control={form.control}
+                  name='email'
+                  render={({ field }) => (
+                    <FormItem className='w-full'>
+                      <FormControl>
+                        <Input
+                          type='email'
+                          placeholder='Email'
+                          autoComplete='email'
+                          className='w-full'
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className='ml-1 text-xs' />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-              {errors.email?.message && (
-                <p className='ml-1 mt-2 text-sm text-rose-400'>
-                  {errors.email.message}
+              <div className='w-full'>
+                <Button
+                  type='submit'
+                  disabled={isSubmitting}
+                  className='w-full disabled:opacity-50'
+                >
+                  {isSubmitting ? 'Submitting...' : 'Subscribe'}
+                </Button>
+              </div>
+
+              <div>
+                <p className='text-xs text-muted-foreground'>
+                  We care about your data. Read our{' '}
+                  <Link href='/privacy' className='font-bold'>
+                    privacy&nbsp;policy.
+                  </Link>
                 </p>
-              )}
-            </div>
-
-            <div className='w-full'>
-              <Button
-                type='submit'
-                disabled={isSubmitting}
-                className='w-full disabled:opacity-50'
-              >
-                {isSubmitting ? 'Submitting...' : 'Subscribe'}
-              </Button>
-            </div>
-
-            <div>
-              <p className='text-xs text-muted-foreground'>
-                We care about your data. Read our{' '}
-                <Link href='/privacy' className='font-bold'>
-                  privacy&nbsp;policy.
-                </Link>
-              </p>
-            </div>
-          </form>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </section>

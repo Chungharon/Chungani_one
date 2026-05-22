@@ -2,11 +2,13 @@ import Link from 'next/link'
 
 import { PostMetadata } from '@/lib/posts'
 import { formatDate } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 
 export default function Posts({ posts }: { posts: PostMetadata[] }) {
   return (
     <ul className='flex flex-col gap-8'>
-      {posts.map(post => (
+      {posts.map((post, index) => (
         <li key={post.slug}>
           <Link
             href={`/posts/${post.slug}`}
@@ -20,11 +22,14 @@ export default function Posts({ posts }: { posts: PostMetadata[] }) {
             </div>
 
             {post.publishedAt && (
-              <p className='mt-1 text-sm font-light'>
-                {formatDate(post.publishedAt)}
-              </p>
+              <div className='mt-1'>
+                <Badge variant='secondary' className='font-light'>
+                  {formatDate(post.publishedAt)}
+                </Badge>
+              </div>
             )}
           </Link>
+          {index < posts.length - 1 && <Separator className='mt-8' />}
         </li>
       ))}
     </ul>
