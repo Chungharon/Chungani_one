@@ -1,0 +1,86 @@
+---
+  title: Cloud Monitoring Stack
+  summary: A self-hosted observability platform built with Prometheus, Grafana, and Alertmanager — deployed on GCP with automated alerting and dashboards.
+  image: /images/projects/ecommerce-store.jpg
+  author: 'Haron Ngaira'
+  publishedAt: '2025-02-14'
+  category: case-studies
+---
+
+A production-grade observability stack deployed on Google Cloud Platform. It
+collects metrics from multiple services, visualizes them in Grafana dashboards,
+and routes alerts to Slack and email based on severity.
+
+## Problem
+
+Our team was flying blind on a suite of microservices. Errors surfaced only when
+customers reported them, and diagnosing the root cause meant grepping through
+logs manually. We needed structured metrics, persistent dashboards, and proactive
+alerting.
+
+## Architecture
+
+```
+Services → Prometheus (scrape) → Alertmanager → Slack / Email
+                ↓
+            Grafana (visualize)
+```
+
+All components run as Docker containers orchestrated by Docker Compose, deployed
+to a GCP Compute Engine instance behind a Cloud Load Balancer.
+
+## Technologies
+
+- **Prometheus** — metric scraping and storage with a 30-day retention window
+- **Grafana** — dashboards with templating for multi-service views
+- **Alertmanager** — alert routing, grouping, and silencing
+- **Node Exporter** — host-level metrics (CPU, memory, disk, network)
+- **Docker Compose** — local and production orchestration
+- **GitHub Actions** — CI/CD for config changes
+- **GCP Compute Engine** — cloud host with persistent disk for metric storage
+
+## Key Features
+
+- **Custom dashboards** for request rate, error rate, and latency (RED method)
+- **Multi-severity alerts** — warning fires at 90% disk usage, critical at 95%
+- **Slack integration** — alerts route to `#ops-alerts` with severity labels
+- **Automated provisioning** — Grafana datasources and dashboards are provisioned
+  via config files, so no manual setup after a redeploy
+- **TLS termination** — Nginx reverse proxy with Let's Encrypt certificates in front
+  of Grafana
+
+## Alerting Rules
+
+```yaml
+groups:
+  - name: service.rules
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+```
+
+## Deployment
+
+Config changes to `prometheus.yml` or alert rules trigger a GitHub Actions
+workflow that SSH-deploys to the GCP instance and reloads Prometheus without
+downtime using its live reload endpoint (`POST /-/reload`).
+
+## Outcome
+
+- **MTTD reduced from hours to minutes** — alerts fire within 2 minutes of a
+  threshold breach
+- **On-call confidence improved** — dashboards give responders immediate context
+  during incidents
+- **Zero-downtime config updates** — live reload eliminates restart cycles
+
+## Lessons Learned
+
+Prometheus scrape intervals and retention periods need to be tuned to the
+cardinality of your label sets early on. High-cardinality labels (e.g., request
+UUIDs) cause memory growth that is difficult to fix retroactively without
+dropping data.

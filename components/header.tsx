@@ -199,7 +199,7 @@ export default function Header() {
                       </li>
                       <li>
                         <Link 
-                          href='https://github.com' 
+                          href='https://github.com/Chungharon' 
                           target='_blank'
                           rel='noopener noreferrer'
                           className='flex items-start gap-3 rounded-lg p-2.5 hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
@@ -363,7 +363,7 @@ export default function Header() {
                             Case Studies
                           </Link>
                           <Link 
-                            href='https://github.com'
+                            href='https://github.com/Chungharon'
                             target='_blank'
                             rel='noopener noreferrer'
                             className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'

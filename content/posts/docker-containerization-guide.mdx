@@ -1,0 +1,121 @@
+---
+  title: Containerizing Applications with Docker
+  summary: A hands-on guide to writing production-ready Dockerfiles, managing images efficiently, and integrating containers into a CI/CD workflow.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2025-01-22'
+---
+
+Docker lets you package an application and all its dependencies into a single
+portable unit. This post covers writing lean Dockerfiles, building images
+efficiently, and wiring containers into a deployment pipeline.
+
+## Why Containers?
+
+- **Consistency** — the same image runs on your laptop, in CI, and in production
+- **Isolation** — applications cannot interfere with each other's dependencies
+- **Scalability** — container orchestrators (Kubernetes, Cloud Run) scale instances
+  up and down based on load
+- **Fast rollbacks** — an image tag is an immutable artifact; rolling back is a
+  one-line config change
+
+## Writing a Production-Ready Dockerfile
+
+A naive Dockerfile ships the entire Node.js dev environment to production. Use
+multi-stage builds to keep the final image small:
+
+```dockerfile
+# Stage 1 — build
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2 — runtime
+FROM node:20-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+The `builder` stage installs dev dependencies and compiles the app. The `runner`
+stage copies only the compiled output — the final image has no source code or
+dev tooling.
+
+## Reducing Image Size
+
+| Technique | Impact |
+|---|---|
+| Alpine base image | ~150 MB → ~50 MB |
+| Multi-stage build | Strips build tools |
+| `.dockerignore` | Excludes `node_modules`, `.git`, `.env` |
+| `npm ci --omit=dev` | No dev dependencies in prod |
+
+A lean `.dockerignore`:
+
+```
+node_modules
+.next
+.git
+.env
+*.log
+```
+
+## Environment Variables
+
+Never bake secrets into an image. Pass them at runtime:
+
+```bash
+docker run -e DATABASE_URL=$DATABASE_URL -e RESEND_API_KEY=$RESEND_API_KEY myapp
+```
+
+In production, inject secrets via your cloud provider's secret manager or
+orchestration platform (Cloud Run secrets, Kubernetes Secrets).
+
+## Health Checks
+
+Add a health check so the orchestrator knows when a container is ready:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
+```
+
+## Integrating with CI/CD
+
+Build and push images in GitHub Actions, then deploy the new tag:
+
+```yaml
+- name: Build and push
+  uses: docker/build-push-action@v5
+  with:
+    push: true
+    tags: |
+      ghcr.io/${{ github.repository }}:${{ github.sha }}
+      ghcr.io/${{ github.repository }}:latest
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+
+- name: Deploy to Cloud Run
+  run: |
+    gcloud run deploy myapp \
+      --image ghcr.io/${{ github.repository }}:${{ github.sha }} \
+      --region us-central1 \
+      --platform managed
+```
+
+Tagging with the Git SHA gives every image an immutable, traceable identifier
+that ties the running service back to the exact commit that produced it.
+
+## Conclusion
+
+Containers are the foundation of modern cloud deployments. A well-crafted
+Dockerfile — lean, multi-stage, secrets-free — makes your application portable,
+reproducible, and ready to run anywhere from a developer laptop to a global
+cloud deployment.

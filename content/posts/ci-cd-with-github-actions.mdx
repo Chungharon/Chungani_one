@@ -1,0 +1,127 @@
+---
+  title: Building a CI/CD Pipeline with GitHub Actions
+  summary: A practical guide to automating build, test, and deployment workflows using GitHub Actions — from a basic pipeline to a multi-environment deployment strategy.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2024-11-10'
+---
+
+GitHub Actions lets you automate your entire software delivery process directly
+from your repository. This post walks through building a production-ready
+CI/CD pipeline from scratch.
+
+## Why GitHub Actions?
+
+- **Zero infrastructure** — no Jenkins server to maintain
+- **Matrix builds** — test across multiple Node versions in parallel
+- **Native secrets management** — no third-party vault needed for most cases
+- **Marketplace** — thousands of reusable actions for common tasks
+
+## The Basic Pipeline Structure
+
+Every workflow lives in `.github/workflows/`. A minimal CI workflow:
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+```
+
+## Adding a Deployment Stage
+
+Separate CI (build + test) from CD (deploy) using job dependencies:
+
+```yaml
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run build && npm test
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run build
+      - name: Deploy to Firebase
+        run: npx firebase deploy --only hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+```
+
+The `needs: ci` key means `deploy` only runs when `ci` passes. The `if` guard
+ensures deployments only happen from `main`.
+
+## Multi-Environment Strategy
+
+Use GitHub Environments to gate deployments with required reviewers:
+
+```yaml
+deploy-staging:
+  needs: ci
+  environment: staging
+  # deploys on every merge to main
+
+deploy-production:
+  needs: deploy-staging
+  environment: production
+  # requires manual approval via GitHub UI
+```
+
+Configure each environment's secrets independently under
+**Settings → Environments**.
+
+## Caching Dependencies
+
+Cache `node_modules` to cut minutes off every run:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: npm
+```
+
+For Docker builds, use layer caching:
+
+```yaml
+- uses: docker/build-push-action@v5
+  with:
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+```
+
+## Security Practices
+
+- **Least privilege** — request only the permissions each job needs via `permissions:`
+- **Pin action versions** — use full commit SHAs, not `@main`
+- **Scan secrets** — add `trufflesecurity/trufflehog` or `gitleaks/gitleaks-action` to your pipeline
+- **Dependency review** — use `actions/dependency-review-action` on pull requests
+
+## Conclusion
+
+A well-structured GitHub Actions pipeline catches bugs before they reach
+production, enforces consistency across environments, and removes the manual
+steps that introduce human error. Start simple, then layer in environments,
+approvals, and security scanning as your team grows.

@@ -1,0 +1,100 @@
+---
+  title: Introduction to Artifact Repositories with GitHub Packages
+  summary: Learn how to publish, version, and consume packages using GitHub Packages as a private artifact repository for your CI/CD workflows.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2024-09-18'
+---
+
+GitHub Packages is a package hosting service that lets you publish and consume
+packages alongside your source code. It supports npm, Maven, RubyGems, NuGet,
+Docker, and more — all within GitHub's ecosystem.
+
+## What is an Artifact Repository?
+
+An artifact repository is a centralized storage location for build outputs —
+compiled binaries, Docker images, npm packages, or any versioned artifact your
+pipeline produces. Instead of rebuilding from source on every deploy, teams pull
+verified artifacts from the repository.
+
+## Why GitHub Packages?
+
+GitHub Packages integrates directly with your repositories and GitHub Actions
+workflows, which means:
+
+- **No separate service to maintain** — authentication uses your existing GitHub token
+- **Native CI/CD integration** — publish artifacts as a workflow step, consume them in the next
+- **Granular access control** — package permissions mirror repository permissions
+- **Audit trail** — every publish and pull is logged
+
+## Publishing an npm Package
+
+Create a `.npmrc` at the root of your project to point at GitHub's registry:
+
+```bash
+@your-org:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
+
+Then add a publish step to your GitHub Actions workflow:
+
+```yaml
+- name: Publish package
+  run: npm publish
+  env:
+    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Make sure your `package.json` scopes the package name to your org:
+
+```json
+{
+  "name": "@your-org/your-package",
+  "version": "1.0.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
+```
+
+## Publishing a Docker Image
+
+```yaml
+- name: Log in to GitHub Container Registry
+  uses: docker/login-action@v3
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Build and push
+  uses: docker/build-push-action@v5
+  with:
+    push: true
+    tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+```
+
+## Consuming Packages Downstream
+
+In a separate repository or deployment workflow, authenticate and pull:
+
+```yaml
+- name: Pull image
+  run: docker pull ghcr.io/your-org/your-image:latest
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+## Versioning Strategy
+
+Use semantic versioning and tag your releases before publishing:
+
+- `1.0.0` — stable release
+- `1.0.0-beta.1` — pre-release for testing pipelines
+- `sha-abc1234` — immutable tag for exact reproducibility in production deploys
+
+## Conclusion
+
+GitHub Packages removes the friction of running a separate artifact registry.
+For teams already using GitHub Actions, it is the most straightforward way to
+version and distribute build outputs across services and environments.
