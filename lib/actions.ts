@@ -1,5 +1,6 @@
 'use server'
 
+import 'server-only'
 import { z } from 'zod'
 import { Resend } from 'resend'
 import { ContactFormSchema, NewsletterFormSchema } from '@/lib/schemas'
@@ -7,68 +8,66 @@ import ContactFormEmail from '@/emails/contact-form-email'
 
 type ContactFormInputs = z.infer<typeof ContactFormSchema>
 type NewsletterFormInputs = z.infer<typeof NewsletterFormSchema>
-const resend = new Resend(process.env.RESEND_API_KEY || 'no-key-provided')
+
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) throw new Error('Email service is not configured.')
+  return new Resend(apiKey)
+}
+
+const OWNER_EMAIL = 'ngairaharon@gmail.com'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
 
 export async function sendEmail(data: ContactFormInputs) {
   const result = ContactFormSchema.safeParse(data)
 
-  if (result.error) {
-    return { error: result.error.format() }
+  if (!result.success) {
+    return { error: 'Invalid form data.' }
   }
 
   try {
     const { name, email, message } = result.data
+    const resend = getResendClient()
 
-    if (!process.env.RESEND_API_KEY) {
-      return { error: 'Email service is not configured.' }
-    }
-
-    const { data, error } = await resend.emails.send({
-      from: 'ngairaharon1@gmail.com',
-      to: [email],
-      cc: ['ngairaharon1@gmail.com'],
-      subject: 'Contact form submission',
-      text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}`,
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: [OWNER_EMAIL],
+      replyTo: email,
+      subject: `New message from ${name}`,
       react: await ContactFormEmail({ name, email, message })
     })
 
-    if (!data || error) {
-      throw new Error('Failed to send email')
-    }
+    if (error) throw new Error('Failed to send email.')
 
     return { success: true }
-  } catch (error) {
-    return { error }
+  } catch {
+    return { error: 'Something went wrong. Please try again later.' }
   }
 }
 
 export async function subscribe(data: NewsletterFormInputs) {
   const result = NewsletterFormSchema.safeParse(data)
 
-  if (result.error) {
-    return { error: result.error.format() }
+  if (!result.success) {
+    return { error: 'Invalid email address.' }
   }
 
   try {
     const { email } = result.data
+    const resend = getResendClient()
 
-    if (!process.env.RESEND_API_KEY) {
-      return { error: 'Newsletter service is not configured.' }
-    }
+    const audienceId = process.env.RESEND_AUDIENCE_ID
+    if (!audienceId) throw new Error('Newsletter service is not configured.')
 
-    const { data, error } = await resend.contacts.create({
-      email: email,
-      audienceId: process.env.RESEND_AUDIENCE_ID as string
+    const { error } = await resend.contacts.create({
+      email,
+      audienceId
     })
 
-    if (!data || error) {
-      throw new Error('Failed to subscribe')
-    }
-
-    // TODO: Send a welcome email
+    if (error) throw new Error('Failed to subscribe.')
 
     return { success: true }
-  } catch (error) {
-    return { error }
+  } catch {
+    return { error: 'Something went wrong. Please try again later.' }
   }
 }

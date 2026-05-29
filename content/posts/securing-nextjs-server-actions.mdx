@@ -1,0 +1,303 @@
+---
+  title: How I Secured My Next.js 16 Server Actions Against Common Exploits
+  summary: A real-world security blueprint for Next.js 16 Server Actions — covering environment variable leaks, input validation with Zod, authentication guards, and safe error shielding.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2026-05-29'
+---
+
+Next.js 16 Server Actions are genuinely one of the best things to happen to
+fullstack development in recent memory. You define a function, slap `'use server'`
+on it, call it from a client component, and the boilerplate API route is gone.
+No `fetch`, no route handler, no manually mapping request bodies — it just works.
+
+But there is a critical misconception that gets developers into trouble: **Server
+Actions are not magic. They are public-facing HTTP POST endpoints.** Anyone can
+open the network tab, grab the encrypted action ID, and hit it directly with a
+tool like `curl` or Postman. If your action mutates data, sends emails, or
+touches a database — and you have no guards — you have an open door.
+
+This is the story of how I discovered that the hard way, and the three-layer
+security blueprint I now apply to every Server Action I write.
+
+---
+
+## The "Missing API Key" Gotcha — A Real-World Wake-Up Call
+
+While wiring up my portfolio's contact form, I hit this runtime error:
+
+```
+Error: Missing API key. Pass it to the constructor `new Resend('re_123')`.
+```
+
+My `lib/actions.ts` had this at the top:
+
+```tsx
+const resend = new Resend(process.env.RESEND_API_KEY)
+```
+
+The variable was in my `.env` file. Everything looked fine — until I realised
+the file was not being loaded in the context where this module was being
+evaluated. The Resend instance was constructed with `undefined`, and the SDK
+rightly threw.
+
+This exposed two gaps simultaneously.
+
+### Server-only variables vs. `NEXT_PUBLIC_` variables
+
+Next.js distinguishes between two kinds of environment variables:
+
+| Variable | Available on | Example |
+|---|---|---|
+| `RESEND_API_KEY` | Server only | Secret keys, DB URLs |
+| `NEXT_PUBLIC_API_URL` | Server + Client bundle | Public endpoints |
+
+Any variable **without** the `NEXT_PUBLIC_` prefix is stripped from the client
+bundle entirely. That is the correct behaviour — you do not want your API keys
+shipped to browsers. The problem arises when you accidentally import a
+server-side module from a client component, causing the server module to be
+bundled for the client and the variable to silently become `undefined`.
+
+### Guard with `import 'server-only'`
+
+The `server-only` package is a one-line solution. Add it to any module that
+must never execute on the client:
+
+```bash
+npm install server-only
+```
+
+```tsx
+// lib/actions.ts
+'use server'
+import 'server-only'   // build-time error if this file is imported client-side
+
+import { Resend } from 'resend'
+```
+
+If a client component ever tries to import this file, Next.js will throw a
+**build-time error** — not a silent runtime failure — telling you exactly what
+went wrong and where.
+
+---
+
+## The Triple-Threat Security Blueprint
+
+With the environment variable lesson in hand, here is the three-pillar pattern
+I now apply to every Server Action.
+
+### A. Input Validation with Zod
+
+Server Actions receive raw user input. Never trust it. Use Zod's `safeParse`
+(not `parse`) so validation failures return a typed error object instead of
+throwing:
+
+```tsx
+'use server'
+import 'server-only'
+import { z } from 'zod'
+
+const ContactSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters.'),
+  email: z.string().email('Invalid email address.'),
+  message: z.string().min(10, 'Message must be at least 10 characters.'),
+})
+
+export async function sendMessage(formData: unknown) {
+  const result = ContactSchema.safeParse(formData)
+
+  if (!result.success) {
+    // Return field-level errors to the form — never throw
+    return { error: result.error.flatten().fieldErrors }
+  }
+
+  const { name, email, message } = result.data
+  // ... safe to use now
+}
+```
+
+`safeParse` means an attacker sending `{ message: { $ne: null } }` or a
+10,000-character string gets a structured validation error back — not a crash
+or an unhandled exception that leaks your stack trace.
+
+### B. Authentication & Authorization Inside the Action
+
+Middleware can protect routes, but middleware runs before the request reaches
+the action — it does not protect the action itself when hit directly. Check
+sessions **inside** the action:
+
+```tsx
+'use server'
+import 'server-only'
+import { auth } from '@/lib/auth'  // your session helper
+
+export async function deletePost(postId: string) {
+  const session = await auth()
+
+  if (!session?.user) {
+    return { error: 'You must be signed in to perform this action.' }
+  }
+
+  // Optional: ownership check
+  const post = await db.post.findUnique({ where: { id: postId } })
+
+  if (post?.authorId !== session.user.id) {
+    return { error: 'You do not have permission to delete this post.' }
+  }
+
+  await db.post.delete({ where: { id: postId } })
+  return { success: true }
+}
+```
+
+Even if someone replays the action request with a stolen session token, the
+ownership check ensures they can only act on their own data.
+
+### C. Secure Error Shielding
+
+Raw `catch` blocks that return `error` directly are a security liability:
+
+```tsx
+// ❌ Leaks stack traces, DB errors, internal paths
+} catch (error) {
+  return { error }
+}
+```
+
+A database error message might read:
+`relation "users" does not exist at character 22` — which tells an attacker
+your schema and database engine. Instead, log the real error server-side and
+return only a safe, generic message to the client:
+
+```tsx
+// ✅ Log internally, return safely
+} catch (err) {
+  console.error('[sendMessage] Unexpected error:', err)
+  return { error: 'Something went wrong. Please try again later.' }
+}
+```
+
+In production, pipe `console.error` to a structured logger (Pino, Winston) or
+an observability platform (Datadog, Sentry) so errors are captured without
+exposing them to end users.
+
+---
+
+## Putting It All Together
+
+Here is a complete, production-ready Server Action combining all three pillars:
+
+```tsx
+'use server'
+import 'server-only'
+
+import { z } from 'zod'
+import { Resend } from 'resend'
+import { auth } from '@/lib/auth'
+
+const MessageSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  message: z.string().min(10).max(2000),
+})
+
+function getResendClient() {
+  const key = process.env.RESEND_API_KEY
+  if (!key) throw new Error('RESEND_API_KEY is not set.')
+  return new Resend(key)
+}
+
+export async function sendMessage(formData: unknown) {
+  // Pillar A — Input validation
+  const result = MessageSchema.safeParse(formData)
+  if (!result.success) {
+    return { error: result.error.flatten().fieldErrors }
+  }
+
+  // Pillar B — Authentication
+  const session = await auth()
+  if (!session?.user) {
+    return { error: 'Unauthorized.' }
+  }
+
+  // Pillar C — Safe execution with error shielding
+  try {
+    const resend = getResendClient()
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL!,
+      to: ['you@yourdomain.com'],
+      replyTo: result.data.email,
+      subject: `New message from ${result.data.name}`,
+      text: result.data.message,
+    })
+
+    if (error) throw error
+
+    return { success: true }
+  } catch (err) {
+    console.error('[sendMessage]', err)
+    return { error: 'Something went wrong. Please try again later.' }
+  }
+}
+```
+
+### Wiring it to `useActionState` (React 19 / Next.js 16)
+
+React 19's `useActionState` hook gives you first-class form state management
+without a separate form library. It tracks the action's return value and pending
+state out of the box:
+
+```tsx
+'use client'
+
+import { useActionState } from 'react'
+import { sendMessage } from '@/lib/actions'
+
+const initialState = { error: null, success: false }
+
+export default function ContactForm() {
+  const [state, formAction, isPending] = useActionState(sendMessage, initialState)
+
+  return (
+    <form action={formAction}>
+      <input name='name' required />
+      <input name='email' type='email' required />
+      <textarea name='message' required />
+
+      {state?.error && (
+        <p className='text-red-500 text-sm'>{String(state.error)}</p>
+      )}
+      {state?.success && (
+        <p className='text-green-500 text-sm'>Message sent!</p>
+      )}
+
+      <button type='submit' disabled={isPending}>
+        {isPending ? 'Sending...' : 'Send Message'}
+      </button>
+    </form>
+  )
+}
+```
+
+---
+
+## Conclusion & Checklist
+
+Server Actions eliminate boilerplate, but they do not eliminate the
+responsibility to secure your endpoints. Here is the checklist I run through
+before shipping any Server Action in 2026:
+
+- [ ] `import 'server-only'` is at the top of every server-side module
+- [ ] Environment variables are validated at runtime with a `getClient()` helper — no silent fallbacks
+- [ ] All input is validated with `safeParse` before touching any service or database
+- [ ] Sessions are checked **inside** the action, not just in middleware
+- [ ] Ownership checks are in place for any mutation involving user-owned data
+- [ ] `catch` blocks log the real error internally and return only a safe message to the client
+- [ ] `RESEND_FROM_EMAIL` and other service credentials are in `.env`, listed in `.env.example`, and never hardcoded
+
+The gap between a Server Action that works and one that is secure is small —
+but the consequences of skipping these steps are not.
+
+---
+
+*Have questions or found a gap in this checklist? Reach out via the [contact form](/contact).*

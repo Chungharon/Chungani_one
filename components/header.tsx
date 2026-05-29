@@ -4,62 +4,33 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  ChevronDown, 
-  Github, 
-  Palette, 
-  Eye, 
-  Download, 
-  Menu, 
-  X,
-  Briefcase
-} from 'lucide-react'
+import { ChevronDown, Eye, Download, Menu, X } from 'lucide-react'
 import ThemeToggle from '@/components/theme-toggle'
 import { cn } from '@/lib/utils'
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [isPortfolioOpen, setIsPortfolioOpen] = useState(false)
   const [isResumeOpen, setIsResumeOpen] = useState(false)
-  
-  const portfolioTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const pathname = usePathname()
 
-  // Track if any menu/dropdown is active
-  const isAnyMenuOpen = isPortfolioOpen || isResumeOpen || isMobileMenuOpen
+  const isAnyMenuOpen = isResumeOpen || isMobileMenuOpen
 
-  // Helper to close all active menus
   const closeAllMenus = () => {
     setIsMobileMenuOpen(false)
-    setIsPortfolioOpen(false)
     setIsResumeOpen(false)
   }
 
-  // Auto-close open menus when route changes
   useEffect(() => {
     closeAllMenus()
   }, [pathname])
 
-  // Clear timeouts on unmount
   useEffect(() => {
     return () => {
-      if (portfolioTimeoutRef.current) clearTimeout(portfolioTimeoutRef.current)
       if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current)
     }
   }, [])
-
-  // Desktop Hover Controls
-  const handlePortfolioMouseEnter = () => {
-    if (portfolioTimeoutRef.current) clearTimeout(portfolioTimeoutRef.current)
-    setIsPortfolioOpen(true)
-  }
-
-  const handlePortfolioMouseLeave = () => {
-    portfolioTimeoutRef.current = setTimeout(() => {
-      setIsPortfolioOpen(false)
-    }, 150)
-  }
 
   const handleResumeMouseEnter = () => {
     if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current)
@@ -67,61 +38,65 @@ export default function Header() {
   }
 
   const handleResumeMouseLeave = () => {
-    resumeTimeoutRef.current = setTimeout(() => {
-      setIsResumeOpen(false)
-    }, 150)
+    resumeTimeoutRef.current = setTimeout(() => setIsResumeOpen(false), 150)
   }
 
-  // Animation variants
   const dropdownVariants = {
     hidden: { opacity: 0, y: 10, scale: 0.96 },
-    visible: { 
-      opacity: 1, 
-      y: 0, 
+    visible: {
+      opacity: 1,
+      y: 0,
       scale: 1,
-      transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } 
+      transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const }
     },
-    exit: { 
-      opacity: 0, 
-      y: 8, 
+    exit: {
+      opacity: 0,
+      y: 8,
       scale: 0.96,
-      transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } 
+      transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] as const }
     }
   }
 
   const mobileMenuVariants = {
     hidden: { opacity: 0, height: 0 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       height: 'auto',
-      transition: { duration: 0.3, ease: 'easeInOut' }
+      transition: { duration: 0.3, ease: 'easeInOut' as const }
     },
-    exit: { 
-      opacity: 0, 
+    exit: {
+      opacity: 0,
       height: 0,
-      transition: { duration: 0.25, ease: 'easeInOut' }
+      transition: { duration: 0.25, ease: 'easeInOut' as const }
     }
   }
 
   const accordionVariants = {
     hidden: { height: 0, opacity: 0, marginTop: 0 },
-    visible: { 
-      height: 'auto', 
+    visible: {
+      height: 'auto',
       opacity: 1,
       marginTop: 8,
-      transition: { duration: 0.2, ease: 'easeOut' }
+      transition: { duration: 0.2, ease: 'easeOut' as const }
     },
-    exit: { 
-      height: 0, 
+    exit: {
+      height: 0,
       opacity: 0,
       marginTop: 0,
-      transition: { duration: 0.15, ease: 'easeIn' }
+      transition: { duration: 0.15, ease: 'easeIn' as const }
     }
   }
 
+  const navLinks = [
+    { label: 'Posts', href: '/posts' },
+    { label: 'Blog', href: '/blog' },
+    { label: 'Projects', href: '/projects' },
+    { label: 'Contact', href: '/contact' },
+  ]
+
   return (
     <>
-      {/* Global Background Dim & Blur Overlay */}
+      {/* Backdrop overlay */}
       <AnimatePresence>
         {isAnyMenuOpen && (
           <motion.div
@@ -129,135 +104,54 @@ export default function Header() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="fixed inset-0 bg-black/45 backdrop-blur-[3px] z-40 transition-all cursor-pointer"
+            className='fixed inset-0 bg-black/45 backdrop-blur-[3px] z-40 cursor-pointer'
             onClick={closeAllMenus}
-            aria-hidden="true"
+            aria-hidden='true'
           />
         )}
       </AnimatePresence>
 
       <header className='fixed inset-x-0 top-0 z-50 bg-background/80 border-b border-border/20 py-4 backdrop-blur-md transition-all duration-300'>
         <nav className='container flex max-w-4xl items-center justify-between mx-auto px-4'>
-          {/* Brand / Logo */}
-          <div>
-            <Link href='/' className='font-serif text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity'>
-              HN
-            </Link>
-          </div>
 
-          {/* Desktop Navigation Links */}
+          {/* Brand */}
+          <Link
+            href='/'
+            className='font-serif text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity'
+          >
+            HN
+          </Link>
+
+          {/* Desktop nav */}
           <ul className='hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground'>
-            <li className={cn(
-              'transition-colors hover:text-foreground',
-              pathname === '/posts' && 'text-foreground'
-            )}>
-              <Link href='/posts'>Posts</Link>
-            </li>
-
-            {/* Portfolio Dropdown */}
-            <li 
-              className='relative py-2'
-              onMouseEnter={handlePortfolioMouseEnter}
-              onMouseLeave={handlePortfolioMouseLeave}
-            >
-              <button 
-                onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
-                className={cn(
-                  'flex items-center gap-1 transition-colors hover:text-foreground cursor-pointer focus:outline-none',
-                  (pathname.startsWith('/projects') || isPortfolioOpen) && 'text-foreground'
-                )}
-                aria-haspopup="true"
-                aria-expanded={isPortfolioOpen}
-              >
-                Portfolio
-                <ChevronDown className={cn('size-4 transition-transform duration-300', isPortfolioOpen && 'rotate-180')} />
-              </button>
-
-              <AnimatePresence>
-                {isPortfolioOpen && (
-                  <motion.div 
-                    variants={dropdownVariants}
-                    initial='hidden'
-                    animate='visible'
-                    exit='exit'
-                    className='absolute left-1/2 -translate-x-1/2 top-full mt-3 w-68 rounded-xl border border-border/40 bg-zinc-950 p-2 shadow-2xl z-50 font-sans'
-                  >
-                    <ul className='flex flex-col gap-1'>
-                      <li>
-                        <Link 
-                          href='/projects?filter=case-studies' 
-                          className='flex items-start gap-3 rounded-lg p-2.5 hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
-                        >
-                          <div className='bg-zinc-900 text-zinc-300 rounded-md p-1.5 size-8 flex items-center justify-center group-hover:bg-zinc-800 transition-colors shrink-0'>
-                            <Briefcase className='size-4 text-emerald-400' />
-                          </div>
-                          <div>
-                            <p className='text-xs font-semibold'>Case Studies</p>
-                            <p className='text-[10px] text-zinc-500 mt-0.5 line-clamp-1'>Deep-dive project breakdowns</p>
-                          </div>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link 
-                          href='https://github.com/Chungharon' 
-                          target='_blank'
-                          rel='noopener noreferrer'
-                          className='flex items-start gap-3 rounded-lg p-2.5 hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
-                        >
-                          <div className='bg-zinc-900 text-zinc-300 rounded-md p-1.5 size-8 flex items-center justify-center group-hover:bg-zinc-800 transition-colors shrink-0'>
-                            <Github className='size-4 text-violet-400' />
-                          </div>
-                          <div className='flex-1'>
-                            <p className='text-xs font-semibold'>Open Source</p>
-                            <p className='text-[10px] text-zinc-500 mt-0.5 line-clamp-1'>GitHub contributions & repos</p>
-                          </div>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link 
-                          href='/projects?filter=design-concepts' 
-                          className='flex items-start gap-3 rounded-lg p-2.5 hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
-                        >
-                          <div className='bg-zinc-900 text-zinc-300 rounded-md p-1.5 size-8 flex items-center justify-center group-hover:bg-zinc-800 transition-colors shrink-0'>
-                            <Palette className='size-4 text-amber-400' />
-                          </div>
-                          <div>
-                            <p className='text-xs font-semibold'>Design Concepts</p>
-                            <p className='text-[10px] text-zinc-500 mt-0.5 line-clamp-1'>UI/UX & frontend experiments</p>
-                          </div>
-                        </Link>
-                      </li>
-                    </ul>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
-
-            <li className={cn(
-              'transition-colors hover:text-foreground',
-              pathname === '/contact' && 'text-foreground'
-            )}>
-              <Link href='/contact'>Contact</Link>
-            </li>
+            {navLinks.map(({ label, href }) => (
+              <li key={href} className={cn(
+                'transition-colors hover:text-foreground',
+                pathname.startsWith(href) && 'text-foreground'
+              )}>
+                <Link href={href}>{label}</Link>
+              </li>
+            ))}
           </ul>
 
-          {/* Right side Actions (CV Dropdown & Theme Toggle & Mobile Menu button) */}
+          {/* Right side — Resume dropdown + theme toggle + mobile button */}
           <div className='flex items-center gap-2 sm:gap-4'>
-            
-            {/* CV / Resume Dropdown - Desktop Only */}
-            <div 
+
+            {/* Resume / CV dropdown — desktop only */}
+            <div
               className='relative hidden md:block py-2'
               onMouseEnter={handleResumeMouseEnter}
               onMouseLeave={handleResumeMouseLeave}
             >
-              <button 
+              <button
+                type='button'
                 onClick={() => setIsResumeOpen(!isResumeOpen)}
                 className={cn(
                   'flex items-center gap-1 text-xs font-semibold bg-secondary/80 hover:bg-secondary text-secondary-foreground px-3 py-1.5 rounded-lg border border-border/30 transition-all cursor-pointer focus:outline-none hover:shadow-sm',
                   isResumeOpen && 'bg-secondary ring-1 ring-ring/10'
                 )}
-                aria-haspopup="true"
-                aria-expanded={isResumeOpen}
+                aria-haspopup='true'
+                aria-expanded={isResumeOpen ? 'true' : 'false'}
               >
                 Resume / CV
                 <ChevronDown className={cn('size-3.5 transition-transform duration-300', isResumeOpen && 'rotate-180')} />
@@ -265,7 +159,7 @@ export default function Header() {
 
               <AnimatePresence>
                 {isResumeOpen && (
-                  <motion.div 
+                  <motion.div
                     variants={dropdownVariants}
                     initial='hidden'
                     animate='visible'
@@ -274,8 +168,8 @@ export default function Header() {
                   >
                     <ul className='flex flex-col gap-0.5'>
                       <li>
-                        <Link 
-                          href='/resume' 
+                        <Link
+                          href='/resume'
                           target='_blank'
                           className='flex items-center gap-2 rounded-lg p-2 text-xs font-medium hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
                         >
@@ -284,8 +178,8 @@ export default function Header() {
                         </Link>
                       </li>
                       <li>
-                        <a 
-                          href='/cv.pdf' 
+                        <a
+                          href='/cv.pdf'
                           download='cv.pdf'
                           className='flex items-center gap-2 rounded-lg p-2 text-xs font-medium hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all group'
                         >
@@ -301,8 +195,9 @@ export default function Header() {
 
             <ThemeToggle />
 
-            {/* Mobile Menu Button */}
+            {/* Mobile menu button */}
             <button
+              type='button'
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className='flex md:hidden items-center justify-center p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus:outline-none cursor-pointer'
               aria-label='Toggle mobile menu'
@@ -312,7 +207,7 @@ export default function Header() {
           </div>
         </nav>
 
-        {/* Mobile Navigation Drawer */}
+        {/* Mobile drawer */}
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div
@@ -324,84 +219,31 @@ export default function Header() {
             >
               <div className='container max-w-4xl mx-auto px-6 py-6 flex flex-col gap-5'>
                 <ul className='flex flex-col gap-4 text-base font-medium text-muted-foreground'>
-                  <li>
-                    <Link 
-                      href='/posts'
-                      className={cn('block py-1 hover:text-foreground transition-colors', pathname === '/posts' && 'text-foreground')}
-                    >
-                      Posts
-                    </Link>
-                  </li>
+                  {navLinks.map(({ label, href }) => (
+                    <li key={href}>
+                      <Link
+                        href={href}
+                        className={cn(
+                          'block py-1 hover:text-foreground transition-colors',
+                          pathname.startsWith(href) && 'text-foreground'
+                        )}
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
 
-                  {/* Portfolio Accordion in Mobile */}
-                  <li>
-                    <button 
-                      onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
-                      className={cn(
-                        'flex items-center justify-between w-full py-1 hover:text-foreground text-left cursor-pointer focus:outline-none',
-                        pathname.startsWith('/projects') && 'text-foreground'
-                      )}
-                    >
-                      Portfolio
-                      <ChevronDown className={cn('size-4 transition-transform duration-300', isPortfolioOpen && 'rotate-180')} />
-                    </button>
-                    
-                    <AnimatePresence>
-                      {isPortfolioOpen && (
-                        <motion.div
-                          variants={accordionVariants}
-                          initial='hidden'
-                          animate='visible'
-                          exit='exit'
-                          className='overflow-hidden border-l border-border/30 pl-4 flex flex-col gap-3 mt-2'
-                        >
-                          <Link 
-                            href='/projects?filter=case-studies'
-                            className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'
-                          >
-                            <Briefcase className='size-4 text-emerald-400' />
-                            Case Studies
-                          </Link>
-                          <Link 
-                            href='https://github.com/Chungharon'
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'
-                          >
-                            <Github className='size-4 text-violet-400' />
-                            Open Source
-                          </Link>
-                          <Link 
-                            href='/projects?filter=design-concepts'
-                            className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'
-                          >
-                            <Palette className='size-4 text-amber-400' />
-                            Design Concepts
-                          </Link>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </li>
-
-                  <li>
-                    <Link 
-                      href='/contact'
-                      className={cn('block py-1 hover:text-foreground transition-colors', pathname === '/contact' && 'text-foreground')}
-                    >
-                      Contact
-                    </Link>
-                  </li>
-
-                  {/* CV Accordion in Mobile */}
+                  {/* Resume / CV accordion — mobile */}
                   <li className='border-t border-border/10 pt-4'>
-                    <button 
+                    <button
+                      type='button'
                       onClick={() => setIsResumeOpen(!isResumeOpen)}
                       className='flex items-center justify-between w-full py-1 hover:text-foreground text-left cursor-pointer focus:outline-none'
                     >
                       Resume / CV
                       <ChevronDown className={cn('size-4 transition-transform duration-300', isResumeOpen && 'rotate-180')} />
                     </button>
-                    
+
                     <AnimatePresence>
                       {isResumeOpen && (
                         <motion.div
@@ -411,7 +253,7 @@ export default function Header() {
                           exit='exit'
                           className='overflow-hidden border-l border-border/30 pl-4 flex flex-col gap-3 mt-2'
                         >
-                          <Link 
+                          <Link
                             href='/resume'
                             target='_blank'
                             className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'
@@ -419,7 +261,7 @@ export default function Header() {
                             <Eye className='size-4 text-emerald-400' />
                             View Online
                           </Link>
-                          <a 
+                          <a
                             href='/cv.pdf'
                             download='cv.pdf'
                             className='flex items-center gap-2 text-sm hover:text-foreground transition-colors py-0.5'
