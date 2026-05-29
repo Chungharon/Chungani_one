@@ -1,56 +1,57 @@
 ---
-  title: NextJs MDX Portfolio
-  summary: A portfolio website built with NextJs and MDX.
+  title: Next.js MDX Portfolio
+  summary: A minimal, fast portfolio site built with Next.js and MDX — designed for developers who want to own their content without a CMS.
   image: /images/projects/next-mdx-portfolio.jpg
   author: 'Haron Ngaira'
   publishedAt: '2024-09-19'
   category: design-concepts
+  tags: ['Next.js', 'MDX', 'Tailwind CSS', 'TypeScript', 'Vercel']
 ---
 
-This is a portfolio website built with NextJs and MDX. It uses the `@next/mdx`
-package to render MDX content in NextJs pages.
+## The Concept
 
-## Features
+Most portfolio templates are over-engineered — too many dependencies, too much
+JavaScript, too little control. This design explores the opposite: a site that
+is fast by default, fully owned by the developer, and content-managed through
+plain MDX files checked into git.
 
-- **MDX Support**: Write content in MDX format.
-- **Syntax Highlighting**: Code blocks are syntax highlighted.
-- **Custom Components**: Use custom components in your MDX files.
-- **Responsive Design**: The website is responsive and works on all devices.
+No CMS. No database. Just markdown with superpowers.
 
-## Technologies
+## Design Decisions
 
-- **NextJs**: A React framework for building static and dynamic websites.
-- **MDX**: A file format that allows you to write JSX in your Markdown files.
-- **Tailwind CSS**: A utility-first CSS framework for building custom designs.
-- **Vercel**: A cloud platform for static sites and serverless functions.
+**MDX over a headless CMS** — content lives in the repository. Every post and
+project is a `.mdx` file with frontmatter. Writing is done in any text editor.
+Versioning is git. This trades a visual editing UI for complete ownership and
+zero vendor lock-in.
 
-## Getting Started
+**File-based routing** — Next.js App Router maps the `content/` directory
+structure directly to URLs. Adding a new post is as simple as creating a file.
 
-To get started with this project, you can clone the repository and install the
-dependencies:
+**Tailwind Typography** — the `@tailwindcss/typography` plugin handles all
+prose styling. Dark mode is a single class toggle. No custom CSS needed for
+readable long-form content.
 
-```bash
-git clone
-cd next-mdx-portfolio
-npm install
+**No client JavaScript for reading** — post and project pages are fully static.
+React only ships to pages that need interactivity (contact form, theme toggle).
+
+## What It Looks Like in Practice
+
+```mdx
+---
+title: My Post Title
+summary: A one-line description.
+publishedAt: '2026-01-01'
+---
+
+## Introduction
+
+Write in **Markdown** and use <CustomComponents /> where needed.
 ```
 
-Once the dependencies are installed, you can run the development server:
+That file becomes a fully styled, SEO-optimised, statically served page at
+build time.
 
-```bash
-npm run dev
-```
+## Takeaway
 
-The development server will start at `http://localhost:3000`.
-
-## Deployment
-
-To deploy this project, you can use Vercel. You can link your GitHub repository
-to Vercel and deploy the project with a single click.
-
-## Conclusion
-
-This portfolio website is a great example of how you can use NextJs and MDX to
-build a modern website with dynamic content. By combining the power of NextJs
-and MDX, you can create interactive and engaging websites that are easy to
-maintain and update.
+The best portfolio is one you'll actually keep updated. Removing friction from
+the writing process — no login, no editor, just a file — is the real design win here.

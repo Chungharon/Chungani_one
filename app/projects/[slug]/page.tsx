@@ -1,68 +1,39 @@
-import Link from 'next/link'
-import Image from 'next/image'
-
-import { formatDate } from '@/lib/utils'
-import MDXContent from '@/components/mdx-content'
-import { ArrowLeftIcon } from '@radix-ui/react-icons'
 import { getProjectBySlug, getProjects } from '@/lib/projects'
+import CaseStudyLayout from '@/components/case-study-layout'
+import DesignConceptLayout from '@/components/design-concept-layout'
 import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
 
 export async function generateStaticParams() {
   const projects = await getProjects()
-  const slugs = projects.map(project => ({ slug: project.slug }))
-
-  return slugs
+  return projects.map(project => ({ slug: project.slug }))
 }
 
-export default async function Project(
-  props: {
-    params: Promise<{ slug: string }>
+export async function generateMetadata(
+  props: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await props.params
+  const project = await getProjectBySlug(slug)
+  if (!project) return {}
+  return {
+    title: project.metadata.title,
+    description: project.metadata.summary,
   }
+}
+
+export default async function ProjectPage(
+  props: { params: Promise<{ slug: string }> }
 ) {
-  const params = await props.params;
-  const { slug } = params
+  const { slug } = await props.params
   const project = await getProjectBySlug(slug)
 
-  if (!project) {
-    notFound()
-  }
+  if (!project) notFound()
 
   const { metadata, content } = project
-  const { title, image, author, publishedAt } = metadata
 
-  return (
-    <section className='pb-24 pt-32'>
-      <div className='container max-w-3xl'>
-        <Link
-          href='/projects'
-          className='mb-8 inline-flex items-center gap-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground'
-        >
-          <ArrowLeftIcon className='h-5 w-5' />
-          <span>Back to projects</span>
-        </Link>
+  if (metadata.category === 'case-studies') {
+    return <CaseStudyLayout metadata={metadata} content={content} />
+  }
 
-        {image && (
-          <div className='relative mb-6 h-96 w-full overflow-hidden rounded-lg'>
-            <Image
-              src={image}
-              alt={title || ''}
-              className='object-cover'
-              fill
-            />
-          </div>
-        )}
-
-        <header>
-          <h1 className='title'>{title}</h1>
-          <p className='mt-3 text-xs text-muted-foreground'>
-            {author} / {formatDate(publishedAt ?? '')}
-          </p>
-        </header>
-
-        <main className='prose mt-16 dark:prose-invert'>
-          <MDXContent source={content} />
-        </main>
-      </div>
-    </section>
-  )
+  return <DesignConceptLayout metadata={metadata} content={content} />
 }
