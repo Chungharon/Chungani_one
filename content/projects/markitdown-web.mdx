@@ -1,0 +1,67 @@
+---
+  title: MarkItDown Web
+  summary: A web wrapper around Microsoft's MarkItDown library — drag and drop any file and get clean, LLM-ready Markdown in seconds.
+  image: /images/projects/markitdown-web.png
+  author: 'Haron Ngaira'
+  publishedAt: '2026-05-30'
+  category: case-studies
+  tags: ['Python', 'FastAPI', 'Next.js', 'Docker', 'REST API']
+---
+
+## Problem
+
+[MarkItDown](https://github.com/microsoft/markitdown) is a powerful Microsoft open-source library that converts virtually any file format — PDF, Word, Excel, PowerPoint, images, HTML — into clean Markdown. But it is command-line only. Non-technical users and teams that need document conversion as part of their workflow had no accessible interface to use it.
+
+## Approach
+
+I forked the repository and built a full-stack web wrapper on top of it, giving the library a drag-and-drop UI backed by a REST API.
+
+**Backend — FastAPI (Python)**
+
+A lightweight FastAPI service wraps the MarkItDown converter and exposes three endpoints:
+
+```bash
+GET  /api/health    # liveness check
+GET  /api/formats   # list of supported file types
+POST /api/convert   # upload a file, receive Markdown
+```
+
+Files are written to a temp path, converted, and the temp file is deleted immediately — nothing is persisted on the server.
+
+```python
+@app.post("/api/convert")
+async def convert(file: UploadFile = File(...)):
+    content = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+        tmp.write(content)
+    result = converter.convert(tmp.name)
+    os.unlink(tmp.name)
+    return { "markdown": result.text_content }
+```
+
+**Frontend — Next.js 16**
+
+A minimal Next.js frontend with React Dropzone handles the file upload experience. The converted Markdown is displayed in a raw output panel with copy-to-clipboard and download-as-.md actions.
+
+**Supported formats**
+
+PDF, DOCX, PPTX, XLSX, XLS, CSV, JSON, XML, HTML, TXT, PNG, JPG, EPUB, ZIP.
+
+## Key Features
+
+- **Drag & drop upload** — any supported format, max 10 MB
+- **Instant conversion** — no queuing, no login, no tracking
+- **Copy & download** — one click to copy Markdown or save as `.md`
+- **Character count** — shows output size for LLM context planning
+- **Docker-ready** — single `docker compose up` runs both services
+
+## Outcome
+
+- Converts a 50-page PDF to structured Markdown in under 3 seconds locally
+- Zero server-side file storage — temp files deleted immediately after conversion
+- Fully open source on GitHub under the `feature/web-wrapper` branch
+- Directly useful as a content pipeline for this portfolio — blog posts can be drafted in Word and converted to MDX-ready Markdown with one upload
+
+## Links
+
+- **GitHub** — [github.com/Chungharon/markitdown](https://github.com/Chungharon/markitdown/tree/feature/web-wrapper)

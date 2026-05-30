@@ -25,6 +25,7 @@ export default function DesignConceptLayout({ metadata, content }: DesignConcept
             alt={title || ''}
             className='object-cover object-center'
             fill
+            sizes='100vw'
             priority
           />
           {/* Gradient fade to background */}

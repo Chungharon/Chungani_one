@@ -71,6 +71,7 @@ export default function CaseStudyLayout({ metadata, content }: CaseStudyLayoutPr
               alt={title || ''}
               className='object-cover'
               fill
+              sizes='(max-width: 768px) 100vw, 768px'
               priority
             />
           </div>
