@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getProjects } from '@/lib/projects'
 import Projects from '@/components/projects'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default async function RecentProjects() {
   const projects = await getProjects(2)
@@ -20,6 +21,21 @@ export default async function RecentProjects() {
           <Link href='/projects'>All projects</Link>
         </Button>
       </div>
+    </section>
+  )
+}
+
+export function RecentProjectsSkeleton() {
+  return (
+    <section className='pb-24'>
+      <Skeleton className='mb-12 h-8 w-40' />
+      <ul className='grid grid-cols-1 gap-8 sm:grid-cols-2'>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <li key={i}>
+            <Skeleton className='h-60 w-full rounded-lg' />
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
