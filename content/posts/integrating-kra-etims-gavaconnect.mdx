@@ -1,0 +1,84 @@
+---
+  title: Integrating KRA eTIMS Through the New GavaConnect Gateway
+  summary: As of 2026, KRA fronts the eTIMS sandbox with the GavaConnect API gateway — which means two independent layers of authentication, not one. Here's the gotcha that breaks legacy integrations, and how to get a signed sale.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2026-06-10'
+---
+
+If you integrated KRA eTIMS a year ago, you called the sandbox directly with your
+device credentials and that was it. As of 2026 that path is gone: KRA now fronts
+the eTIMS sandbox with the **GavaConnect** enterprise gateway (`developer.go.ke`),
+and most integration guides online haven't caught up.
+
+> **TL;DR** — There are now **two** independent auth layers, and they are *not*
+> interchangeable. A GavaConnect **bearer token** authorises your *app* to reach
+> the API. Your eTIMS **`cmcKey`** authorises your *device*. **Every call carries
+> both.** If your old code sent only the device credentials, that's why it's
+> failing now.
+
+## The two layers
+
+```
+Your app ── consumer key/secret ──▶ GavaConnect ── Bearer token ──▶ eTIMS API
+Your device ── TIN + bhfId + serial ──▶ device init ── cmcKey ──▶ signed onto every call
+```
+
+| Layer | Authorises | Credential | Sent as |
+|---|---|---|---|
+| **Gateway** (GavaConnect) | Your *app* | consumer key + secret → bearer token | `Authorization: Bearer <token>` |
+| **Device** (eTIMS OSCU) | Your *device* | TIN + bhfId + serial → `cmcKey` | in the eTIMS headers/body |
+
+The bearer token is **not** the `cmcKey`. Keep your existing endpoint *paths* and
+device logic — just route through the GavaConnect host and add the token.
+
+## Getting set up (one-time)
+
+1. Sign up at **`developer.go.ke`** and **create an app**.
+2. **Subscribe** that app to the **KRA eTIMS Sandbox API** ("KRA-ETIMS-SBX").
+3. Copy the app's **consumer key** and **consumer secret**.
+4. Note the **token URL** and **invoke base URL** shown on the API page — the
+   invoke host may differ from the old `etims-api-sbx.kra.go.ke`.
+
+If you've used Safaricom Daraja, this is the same `client_credentials` flow.
+
+## The token, in practice
+
+Fetch a token with your key/secret as HTTP Basic auth, then attach it to every
+eTIMS call:
+
+```
+POST <token-url>          # client_credentials grant, key:secret as Basic auth
+→ { "access_token": "…", "expires_in": 3600 }
+
+POST <gateway>/<etims-path>
+Authorization: Bearer <access_token>      ← gateway layer
+{ tin, bhfId, cmcKey, …payload }          ← device layer
+```
+
+Tokens are short-lived (commonly ~1 hour), so **cache and refresh** them. On a
+gateway `401`, refresh once and retry.
+
+## Things that will bite you
+
+- **Two error channels.** A non-2xx **HTTP** status is usually a gateway/transport
+  problem (bad token, app not subscribed). But a **`200 OK` can still be a failure**
+  — check `resultCd` in the body (`"000"` = success; anything else, read `resultMsg`).
+- **`403` on an eTIMS call** = your app isn't subscribed/approved for the sandbox API.
+- **`resultCd 901` ("not a valid device")** = wrong or unregistered device serial.
+  Use the exact KRA-approved `dvcSrlNo` — dynamically generated serials are rejected.
+- **`invcNo` must be sequential, unique per branch, and never reused** — not even
+  after a cancellation. Keep one authoritative counter per branch.
+- **Never log the bearer token, consumer secret, or `cmcKey`.** Redact them before
+  persisting any request body.
+
+## The payoff
+
+Once both layers line up, a sandbox sale comes back signed — a real invoice
+number, signature, internal data, and a verifiable QR string. KRA's sandbox also
+exposes an **"Integrator Automated Testing"** tool that feeds the certification
+process, so it's worth running your flows there during development, not just at
+the end.
+
+The mental model that unlocks all of it: **the gateway authorises your app, the
+device key authorises your hardware, and eTIMS wants to see both on every call.**

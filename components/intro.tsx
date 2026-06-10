@@ -14,7 +14,7 @@ export default function Intro() {
       </div>
       <div className='relative'>
         <Image
-          className='rounded-lg grayscale'
+          className='h-45 w-45 rounded-lg object-cover grayscale'
           src={authorImage}
           alt='Haron Ngaira'
           width={180}

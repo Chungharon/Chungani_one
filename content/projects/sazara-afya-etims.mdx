@@ -1,0 +1,98 @@
+---
+  title: Sazara Afya HMIS — KRA eTIMS Integration
+  summary: Wired a multi-tenant hospital management system's receipts and invoices to Kenya's KRA eTIMS (OSCU) tax API, through the new GavaConnect gateway — encrypted per-branch credentials, fiscal signing, and a full audit trail.
+  image: /images/projects/RBAC.png
+  author: 'Haron Ngaira'
+  publishedAt: '2026-06-10'
+  category: case-studies
+  tags: ['Django', 'Python', 'KRA eTIMS', 'OSCU', 'GavaConnect', 'PostgreSQL', 'Fernet']
+---
+
+## Problem
+
+Sazara Afya is a multi-tenant Hospital Management Information System running
+across 11 branches. Every cashier receipt and credit invoice legally needs to be
+fiscalised through **KRA eTIMS** — signed by Kenya Revenue Authority and stamped
+with a verifiable QR code. The codebase shipped with a **VSCU stub** that
+fabricated fake signing data: receipts printed numbers and QR codes that KRA had
+never seen.
+
+Two things made this harder than a normal API integration. First, the system is
+multi-tenant and multi-branch, so credentials and the fiscal device's
+communication key have to be scoped and isolated per branch. Second, as of 2026
+KRA now fronts the eTIMS sandbox with the **GavaConnect** enterprise gateway,
+adding a second, independent authentication layer on top of the device auth that
+most older integration guides never mention.
+
+## Approach
+
+The work converted the stub into a real **OSCU** (Online Sales Control Unit)
+client that calls KRA directly over HTTPS, layered onto the integration
+scaffolding the app already had.
+
+The critical insight was that every eTIMS call now carries **two** independent
+credentials that are not interchangeable:
+
+```
+App  ── consumer key/secret ──▶ GavaConnect ── Bearer token ──▶  eTIMS API
+Device ── TIN + bhfId + serial ──▶ device init ── cmcKey ──▶  signed onto every call
+```
+
+- **Gateway layer (GavaConnect):** a short-lived bearer token fetched via
+  `client_credentials`, cached and refreshed near expiry, retried once on a `401`.
+- **Device layer (eTIMS OSCU):** `TIN` + `bhfId` + `dvcSrlNo` exchanged at device
+  init for a `cmcKey`, persisted into the encrypted credential blob and merged
+  into every subsequent request envelope.
+
+Credentials live in a per-tenant, per-branch **Fernet-encrypted** store — a
+`branch_id = NULL` row is the tenant-wide default, a row with a branch id
+overrides it for that branch. The HTTP transport uses only the Python standard
+library (`urllib`), so the integration added **zero** new dependencies.
+
+Signing is **best-effort by design**: if KRA is down or a credential is wrong,
+the failure is swallowed so it never blocks a cashier from taking money — the
+receipt simply prints without a QR until a retry succeeds, and the failure is
+fully recorded.
+
+The whole sandbox flow collapses into one operator command:
+
+```bash
+python manage.py etims_setup \
+  --tenant <slug> --gava-token-url <url> --url <gateway-base> \
+  --tin <TIN> --bhf-id <branch> --serial <device-serial> \
+  --save --init --test
+```
+
+`--save` stores encrypted credentials, `--init` acquires a token then persists
+the returned `cmcKey`, and `--test` signs a sample sale and prints the invoice
+number, signature, internal data, and QR string.
+
+## Key Features
+
+- **Dual-layer auth** — GavaConnect bearer-token gateway flow in front of eTIMS
+  OSCU device authentication, with token caching, refresh, and single-retry on 401
+- **Per-branch encrypted credentials** — Fernet-encrypted `IntegrationCredential`
+  store scoped per tenant and branch; secrets never appear in API responses or admin
+- **Real fiscal signing** — receipts and invoices submitted to KRA, returning a
+  genuine eTIMS number, signature, and QR; VAT mapped into KRA's A–E tax bands
+- **Full audit trail** — every call writes an `IntegrationAttempt` row (request,
+  response, status, duration, outcome) as the single source of truth for "did KRA accept it?"
+- **Secret redaction** — bearer token, consumer secret, and `cmcKey` masked in the
+  audit log so no plaintext credential is ever persisted
+- **Non-blocking by design** — signing failures degrade gracefully and never stop
+  a payment from being taken
+- **One-command operator tooling** — `etims_setup` configures, initialises, and
+  tests a branch device against the KRA sandbox end to end
+
+## Outcome
+
+- **Replaced fake fiscal data with real KRA signing** — receipts now carry a
+  verifiable eTIMS number, signature, and QR code instead of fabricated values
+- **Future-proofed for the 2026 gateway change** — correctly routes through
+  GavaConnect's two-layer auth that breaks legacy direct-to-eTIMS integrations
+- **Auditable and secure** — every fiscal call is logged and every credential is
+  encrypted at rest with secrets redacted from the audit trail
+- **Zero new dependencies** — built entirely on the Python standard library and
+  the integration scaffolding already in the codebase
+- **Operator-ready** — a documented setup-and-testing runbook plus a single
+  management command take a branch from no credentials to a signed sandbox sale
