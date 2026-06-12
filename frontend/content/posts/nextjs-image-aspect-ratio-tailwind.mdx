@@ -1,0 +1,78 @@
+---
+  title: Why next/image Warns About Aspect Ratio (and Tailwind Is Usually the Cause)
+  summary: One of the most common next/image warnings is "width or height modified, but not the other" — and if you use Tailwind, its preflight is almost always why. Here's the cause and a two-class fix.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2026-06-10'
+---
+
+You drop a `next/image` into a Tailwind project, give it a fixed `width` and
+`height`, and the console lights up:
+
+```
+Image with src "/…" has either width or height modified, but not the other.
+If you use CSS to change the size of your image, also include the styles
+'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+```
+
+The confusing part: you never wrote any CSS to resize it. So where's the
+"modified" dimension coming from?
+
+> **TL;DR** — Tailwind's preflight ships a global `img { height: auto }`. That
+> overrides the `height` you set on the image, while the `width` stays fixed — so
+> one dimension changes and the other doesn't, which is exactly what the warning
+> describes. Pin **both** dimensions with utility classes and the warning is gone.
+
+## What's actually happening
+
+Say your source image is **736×979** (portrait) but you render it as a square:
+
+```tsx
+<Image src={authorImage} alt="…" width={180} height={180} />
+```
+
+Next writes `width="180"` and `height="180"` onto the `<img>`. Then Tailwind's
+base layer applies:
+
+```css
+img, video { max-width: 100%; height: auto; }
+```
+
+That `height: auto` **wins** over the height attribute. The browser now recomputes
+height from the fixed 180px width × the *real* aspect ratio (≈239px) — so the
+height moved, the width didn't, and Next flags the mismatch.
+
+It's not a bug in your code. It's Tailwind's preflight doing exactly what it's
+designed to do, colliding with Next's fixed sizing.
+
+## The fix
+
+Pin **both** dimensions with utility classes. Tailwind's utility layer overrides
+the preflight base, so neither dimension is left to recompute — and `object-cover`
+crops the non-square source into the square cleanly instead of squashing it:
+
+```tsx
+<Image
+  className="h-45 w-45 object-cover rounded-lg"
+  src={authorImage}
+  alt="…"
+  width={180}
+  height={180}
+/>
+```
+
+Keep the `width`/`height` props — Next still uses them to reserve layout space and
+avoid layout shift. The classes just take over the *rendered* size.
+
+## What about `width: "auto"`?
+
+The warning *suggests* adding `height: "auto"` or `width: "auto"`. That works, but
+it means "let this dimension follow the source ratio" — so your square avatar
+becomes a portrait again. Use that only when you genuinely want the source's
+aspect ratio preserved. If you want a fixed shape, **set both** dimensions instead.
+
+## The one-line takeaway
+
+If `next/image` complains about aspect ratio in a Tailwind project, you didn't do
+anything wrong — preflight's `height: auto` is editing one dimension behind your
+back. Set both in CSS (and reach for `object-cover`) to put yourself back in control.

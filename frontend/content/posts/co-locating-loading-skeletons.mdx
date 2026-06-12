@@ -1,0 +1,89 @@
+---
+  title: Co-locating Loading Skeletons With the Components They Stand In For
+  summary: A loading skeleton that lives in a different file from the component it mimics will silently drift out of sync. Keeping them together is a tiny change that pays off every time the real component changes.
+  image: /images/posts/introduction-to-mdx.webp
+  author: 'Haron Ngaira'
+  publishedAt: '2026-06-10'
+---
+
+React Suspense makes loading states clean: wrap an async component in a
+`<Suspense>` boundary, hand it a skeleton as the `fallback`, and the user sees a
+placeholder while data streams in.
+
+The question nobody asks: **where does that skeleton live?** The default is to
+dump it in the page file next to the `<Suspense>`. That feels organised. It
+isn't.
+
+> **TL;DR** — A skeleton's whole job is to mimic the real component's layout. If
+> it lives in a different file, the two drift apart the moment someone edits the
+> real component. Co-locate the skeleton with the component it stands in for and
+> export it — so they're read, reviewed, and changed together.
+
+## The problem with skeletons in the page
+
+Here's the common shape — skeletons defined in the page, far from the components
+they imitate:
+
+```tsx
+// app/page.tsx
+function RecentPostsSkeleton() { /* mimics <RecentPosts /> */ }
+function RecentProjectsSkeleton() { /* mimics <RecentProjects /> */ }
+
+export default function Home() {
+  return (
+    <>
+      <Suspense fallback={<RecentPostsSkeleton />}>
+        <RecentPosts />
+      </Suspense>
+      <Suspense fallback={<RecentProjectsSkeleton />}>
+        <RecentProjects />
+      </Suspense>
+    </>
+  )
+}
+```
+
+`RecentPosts` lives in `components/recent-posts.tsx`. Its skeleton lives in
+`app/page.tsx`. Change the post list from a flex column to a grid, and nothing
+reminds you the placeholder still draws a column. The loading state and the
+loaded state quietly disagree — the exact flash of mismatch a skeleton exists to
+prevent.
+
+## The fix: ship the skeleton with the component
+
+Export the skeleton from the same file as the component it imitates:
+
+```tsx
+// components/recent-posts.tsx
+export default async function RecentPosts() { /* … */ }
+
+export function RecentPostsSkeleton() {
+  return (/* placeholder that mirrors RecentPosts' layout */)
+}
+```
+
+```tsx
+// app/page.tsx
+import RecentPosts, { RecentPostsSkeleton } from '@/components/recent-posts'
+
+<Suspense fallback={<RecentPostsSkeleton />}>
+  <RecentPosts />
+</Suspense>
+```
+
+Now the two sit side by side. Anyone editing the layout sees its placeholder in
+the same file and the same diff. The page goes back to being pure composition —
+no implementation detail leaking into it.
+
+## When *not* to bother
+
+This isn't a law. A generic, reusable `<Skeleton />` primitive belongs in your UI
+kit, not glued to one component. Co-location is for **bespoke** skeletons that
+exist only to mirror **one specific** component's shape — that's where drift
+actually hurts.
+
+## The takeaway
+
+Treat a skeleton as part of its component's contract, not as page furniture. Put
+it where the thing it imitates lives, and the two stay honest with each other for
+free.
