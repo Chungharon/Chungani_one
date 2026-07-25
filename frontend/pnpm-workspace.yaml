@@ -1,0 +1,8 @@
+allowBuilds:
+  auto-reload-brunch: false
+  coffeelint-brunch: false
+  contextify: false
+  core-js: false
+  sharp: false
+  unrs-resolver: false
+  ws: false
